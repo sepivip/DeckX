@@ -1,0 +1,20 @@
+name: Published installer Start menu test
+
+on:
+  push:
+    branches:
+      - codex/verify-published-start-menu
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Open the installed app through Start and verify the saved workspace
+        run: python packaging/windows/verify-published-start-menu.py
