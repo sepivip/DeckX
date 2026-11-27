@@ -1,0 +1,32 @@
+name: Deck support
+description: Request a new deck or offer to test or implement support
+title: "Deck support for "
+body:
+  - type: input
+    id: model
+    attributes:
+      label: Manufacturer and exact model
+      description: Include the hardware revision if you know it.
+    validations:
+      required: true
+  - type: input
+    id: connection
+    attributes:
+      label: Connection and device IDs
+      description: List USB, Bluetooth, or another connection. Include the USB vendor and product IDs if available.
+    validations:
+      required: true
+  - type: textarea
+    id: controls
+    attributes:
+      label: Controls and displays
+      description: List the keys, dials, and screens. Include native LCD dimensions and image orientation if known.
+    validations:
+      required: true
+  - type: textarea
+    id: testing
+    attributes:
+      label: Hardware access and testing
+      description: Share your operating system and what you can test or contribute. Link public protocol documentation, or attach a deck photo, control map, or sanitized sample reports in a comment after opening the issue.
+    validations:
+      required: true
