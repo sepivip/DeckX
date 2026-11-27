@@ -16,15 +16,19 @@ DeckX is an open-source desktop app for programmable decks. Use physical keys an
 
 **Help bring DeckX to more decks.** If you have another model, share its control layout and what you can test, or help implement its device backend. [Request or offer deck support](https://github.com/sepivip/DeckX/issues/new?template=deck-support.yml) · [How to contribute files](CONTRIBUTING.md#contribute-files-on-github)
 
-## Run
+## Install and run
+
+Run the **Windows x64 setup** for a per-user installation, or extract the **portable ZIP** to run from a folder of your choice. [Windows downloads](https://github.com/sepivip/DeckX/releases/latest)
 
 1. Exit Stream Dock from the Windows system tray.
-2. Plug in the AKP03E and open `deckx.exe`.
+2. Plug in the AKP03E. Open **DeckX** from Start or run `deckx.exe` from the extracted ZIP.
 3. Select **Connect** to load your saved workspace onto the deck.
 4. Select a control and click an action, or drag an action from the palette onto the control.
 5. Set its options in the inspector and select **Save workspace** or press **Ctrl+S**. Keep DeckX open to run your bindings.
 
 Only one DeckX runs at a time. Opening it again brings the running window to the front. If the deck is unplugged or stops responding, DeckX reconnects when it returns. Disconnecting or closing DeckX blanks the LCD keys.
+
+Use **Settings → Apps → Installed apps** in Windows to uninstall DeckX. DeckX keeps the workspace and settings in `%LOCALAPPDATA%\DeckX`.
 
 Turn on **Settings → General → Minimize to tray** to keep the deck running when you minimize the window. Click the DeckX icon in the Windows notification area to restore the window, or right-click it for **Open DeckX** and **Quit DeckX**.
 

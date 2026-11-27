@@ -1,0 +1,141 @@
+name: Windows installer
+
+on:
+  push:
+    paths:
+      - packaging/windows/**
+      - .github/workflows/windows-installer.yml
+  pull_request:
+    paths:
+      - packaging/windows/**
+      - .github/workflows/windows-installer.yml
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published tag with a portable Windows ZIP
+        required: true
+        default: v0.7.13
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-2025
+    timeout-minutes: 12
+    env:
+      DECKX_RELEASE_TAG: ${{ inputs.release_tag || 'v0.7.13' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify the published Windows payload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:DECKX_RELEASE_TAG
+          if ($tag -notmatch '^v(\d+\.\d+\.\d+)$') {
+            throw 'Enter a release tag such as v0.7.13.'
+          }
+          $version = $Matches[1]
+          $name = "DeckX-$version-windows-x64.zip"
+          $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$tag" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $release.draft) {
+            throw "Could not read the published release $tag."
+          }
+          $asset = @($release.assets | Where-Object name -CEQ $name)
+          if ($asset.Count -ne 1 -or $asset[0].digest -notmatch '^sha256:[0-9a-f]{64}$') {
+            throw "Could not find a SHA-256 digest for $name."
+          }
+          $zip = Join-Path $env:RUNNER_TEMP $name
+          Invoke-WebRequest -Uri $asset[0].browser_download_url -OutFile $zip
+          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
+          if ("sha256:$hash" -ne $asset[0].digest) {
+            throw "Checksum mismatch for $name."
+          }
+          Expand-Archive -LiteralPath $zip -DestinationPath "$env:RUNNER_TEMP/deckx-payload"
+          "DECKX_INSTALLER_VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Build the Windows installer
+        run: |
+          ./packaging/windows/build-installer.ps1 -Version $env:DECKX_INSTALLER_VERSION `
+            -PayloadDirectory "$env:RUNNER_TEMP/deckx-payload" -OutputDirectory "$env:RUNNER_TEMP/deckx-setup"
+
+      - name: Verify install, reinstall, and uninstall
+        run: |
+          $version = $env:DECKX_INSTALLER_VERSION
+          $setup = "$env:RUNNER_TEMP/deckx-setup/DeckX-$version-windows-x64-setup.exe"
+          $app = Join-Path $env:LOCALAPPDATA 'Programs\DeckX'
+          $exe = Join-Path $app 'deckx.exe'
+          $shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'DeckX.lnk'
+          $uninstallRegistry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
+          $runRegistry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          $workspace = Join-Path $env:LOCALAPPDATA 'DeckX\profile.json'
+          $fixture = '{"installerSmokeTest":true}'
+          $portableStartup = '"C:\Portable\DeckX\deckx.exe" --startup'
+          $silent = '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOCLOSEAPPLICATIONS'
+
+          function Invoke-SilentSetup([string] $Executable) {
+            $process = Start-Process -FilePath $Executable -ArgumentList $silent -WindowStyle Hidden -Wait -PassThru
+            if ($process.ExitCode -ne 0) {
+              throw "$Executable exited with code $($process.ExitCode)."
+            }
+          }
+
+          New-Item -ItemType Directory -Path (Split-Path -Parent $workspace) -Force | Out-Null
+          Set-Content -LiteralPath $workspace -Value $fixture
+          New-Item -Path $runRegistry -Force | Out-Null
+          Set-ItemProperty -LiteralPath $runRegistry -Name DeckX -Value $portableStartup
+          Invoke-SilentSetup $setup
+          if ((Get-ItemPropertyValue -LiteralPath $runRegistry -Name DeckX) -ne $portableStartup) {
+            throw 'Setup changed the existing portable startup entry.'
+          }
+          $link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
+          if ($link.TargetPath -ne $exe) {
+            throw 'The Start menu shortcut has an unexpected target.'
+          }
+          foreach ($notice in 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'DEPENDENCY-LICENSES.txt', 'assets/Inter-OFL.txt') {
+            if (!(Test-Path -LiteralPath (Join-Path $app $notice))) {
+              throw "Missing installed license file $notice."
+            }
+          }
+          $stdout = "$env:RUNNER_TEMP/deckx-version.txt"
+          $process = Start-Process -FilePath $exe -ArgumentList '--version' -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout
+          if ($process.ExitCode -ne 0 -or (Get-Content -LiteralPath $stdout -Raw).Trim() -ne "DeckX $version") {
+            throw 'The installed executable reports an unexpected version.'
+          }
+          Invoke-SilentSetup $setup
+          $installed = @(Get-ChildItem -LiteralPath $uninstallRegistry | Get-ItemProperty |
+            Where-Object DisplayName -EQ 'DeckX')
+          if ($installed.Count -ne 1 -or $installed[0].DisplayVersion -ne $version) {
+            throw 'Setup did not register exactly one Windows uninstall entry.'
+          }
+          if ((Get-FileHash -LiteralPath $exe).Hash -ne (Get-FileHash -LiteralPath "$env:RUNNER_TEMP/deckx-payload/deckx.exe").Hash) {
+            throw 'The installed executable differs from the published Windows build.'
+          }
+          $uninstaller = Join-Path $app 'unins000.exe'
+          Invoke-SilentSetup $uninstaller
+          if ((Get-ItemPropertyValue -LiteralPath $runRegistry -Name DeckX) -ne $portableStartup) {
+            throw 'Uninstall removed the portable startup entry.'
+          }
+          Invoke-SilentSetup $setup
+          Set-ItemProperty -LiteralPath $runRegistry -Name DeckX -Value ('"' + $exe + '" --startup')
+          Invoke-SilentSetup $uninstaller
+          if ((Test-Path -LiteralPath $exe) -or (Test-Path -LiteralPath $shortcut) -or (Test-Path -LiteralPath $installed[0].PSPath)) {
+            throw 'Uninstall left the executable, shortcut, or Windows uninstall entry.'
+          }
+          if ($null -ne (Get-ItemPropertyValue -LiteralPath $runRegistry -Name DeckX -ErrorAction SilentlyContinue)) {
+            throw 'Uninstall left the installed executable registered at startup.'
+          }
+          if ((Get-Content -LiteralPath $workspace -Raw).Trim() -ne $fixture) {
+            throw 'Setup or uninstall changed the workspace.'
+          }
+
+      - name: Upload the tested installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deckx-windows-installer
+          path: ${{ runner.temp }}/deckx-setup/DeckX-*-windows-x64-setup.exe
+          if-no-files-found: error

@@ -9,6 +9,7 @@ For the first public release, review the branches, commit author metadata, pull 
 ## Release assets
 
 - Build from the release commit on Windows with `cargo build --release --locked`. Include `deckx.exe`, `LICENSE`, the bundled asset notices, and the dependency licenses in the Windows ZIP.
+- After publishing the portable ZIP, run the **Windows installer** workflow for that tag. It builds setup with Inno Setup 6 and verifies install, reinstall, and uninstall on a Windows runner. Upload the tested setup to the release and update `SHA256SUMS.txt`. [Inno Setup license](https://jrsoftware.org/files/is/license.txt)
 - Upload `DeckX-Demo.mp4` and its music credit to the GitHub release. The README uses a lightweight poster with a link to the release asset.
 - Run `cargo fmt --all --check`, `cargo clippy --locked --all-targets -- -D warnings`, and `cargo test --locked`. Record the app version and any physical hardware checks separately.
 - After making the repository public, enable private vulnerability reporting and confirm that the links for downloads, the demo, deck requests, and private reports work for visitors. [Private reporting setup](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository)
