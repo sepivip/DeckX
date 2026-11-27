@@ -126,12 +126,13 @@ jobs:
           if ((Test-Path -LiteralPath $exe) -or (Test-Path -LiteralPath $shortcut) -or (Test-Path -LiteralPath $installed[0].PSPath)) {
             throw 'Uninstall left the executable, shortcut, or Windows uninstall entry.'
           }
-          if ($null -ne (Get-ItemPropertyValue -LiteralPath $runRegistry -Name DeckX -ErrorAction SilentlyContinue)) {
+          if ($null -ne (Get-Item -LiteralPath $runRegistry).GetValue('DeckX')) {
             throw 'Uninstall left the installed executable registered at startup.'
           }
           if ((Get-Content -LiteralPath $workspace -Raw).Trim() -ne $fixture) {
             throw 'Setup or uninstall changed the workspace.'
           }
+          Write-Output 'Install, reinstall, and uninstall passed. The workspace and portable startup entry were preserved.'
 
       - name: Upload the tested installer
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
